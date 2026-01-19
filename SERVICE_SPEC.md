@@ -72,7 +72,7 @@ local inference mode. Use the flag instead.
 
 Example:
 ```
-moa-jerry-xl
+moa-<base-model>
 ```
 
 OptiLLM strips the prefix before upstream calls.
@@ -88,6 +88,13 @@ Breaking this rule can cause infinite routing loops.
 
 ---
 
+## Planned registry
+- Service-level JSONL registry for OptiLLM ensembles (planned):
+  `layer-gateway/optillm-proxy/registry/ensembles.jsonl`
+- Source of truth for selectors, model membership, and purpose tags.
+
+---
+
 ## Runtime configuration (minimum)
 
 Expected external configuration (env file, not committed):
@@ -100,7 +107,7 @@ Runtime flags (systemd `ExecStart` should pass explicitly):
 - `--port 4020`
 - `--base-url http://127.0.0.1:4000/v1`
 - `--approach proxy`
-- `--model <base_model>` (example: `jerry-xl`)
+- `--model <base_model>` (example: `qwen3-235b-a22b-instruct-2507-6bit`)
 - `--optillm-api-key <key>` (proxy auth)
 
 Exact variable names depend on pinned OptiLLM version.
@@ -140,6 +147,7 @@ HTTP 200 + valid JSON indicates healthy.
 - Increased token usage
 - Intended for deep reasoning and planning
 - Not for low-latency chat
+- Router model cache (proxy user): `~/.cache/huggingface/hub`
 
 ## Technique selection (model prefixes)
 OptiLLM chooses strategies based on the model prefix:
@@ -150,7 +158,7 @@ OptiLLM chooses strategies based on the model prefix:
 
 Example:
 ```
-OPTILLM_JERRY_XL_MODEL=openai/bon-jerry-xl
+OPTILLM_OPT_ARCHITECT_HIGH_XL_MODEL=bon-mlx-qwen3-235b-a22b-instruct-2507-6bit
 ```
 
 ---

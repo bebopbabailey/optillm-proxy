@@ -43,12 +43,12 @@ Format:
 
 Example:
 ```
-moa-jerry-chat
+moa-<base-model>
 ```
 
 Meaning:
 - `moa` → Mixture-of-Agents strategy
-- `jerry-chat` → base model used upstream
+- `<base-model>` → base model used upstream
 
 OptiLLM strips the prefix internally before calling upstream.
 
@@ -113,7 +113,7 @@ uv run optillm \
   --port 4020 \
   --base-url http://127.0.0.1:4000/v1 \
   --approach proxy \
-  --model jerry-xl \
+  --model <base-model> \
   --optillm-api-key "<optillm-proxy-key>"
 ```
 
@@ -121,32 +121,42 @@ Notes:
 - `OPENAI_API_KEY` is used by OptiLLM when calling the LiteLLM upstream.
 - `--optillm-api-key` protects the OptiLLM proxy itself.
 - `--base-url` must point at the LiteLLM gateway.
+- OptiLLM local (Studio) uses `/Users/thestudio/models/hf/hub` and pins
+  `transformers<5` for router compatibility (see `layer-gateway/optillm-local`).
+
+## Warm start (router model)
+- Systemd uses a warmup request after startup to load the router classifier:
+  - Unit: `/etc/systemd/system/optillm-proxy.service` (`ExecStartPost`)
+  - Payload: `/etc/optillm-proxy/warmup.json`
+- This triggers `router-<base>` once so the router model is loaded into memory.
+- Router model cache (proxy): `~/.cache/huggingface/hub` for the OptiLLM service user.
 
 ## Loop-avoidance rule (critical)
 
 Because OptiLLM calls back into LiteLLM, routing must avoid infinite loops.
 
 Required invariant:
-- LiteLLM → OptiLLM: **prefixed model name** (e.g., `moa-jerry-chat`)
-- OptiLLM → LiteLLM (upstream): **base model only** (e.g., `jerry-chat`)
+- LiteLLM → OptiLLM: **prefixed model name** (e.g., `moa-<base-model>`)
+- OptiLLM → LiteLLM (upstream): **base model only** (e.g., `<base-model>`)
 
 LiteLLM must never route the base model back to OptiLLM.
 
 ---
 
-## Recommended initial use case: development planning assistant
+## Router model (internal)
+- The `router` plugin uses an internal classifier model (not exposed via LiteLLM).
+- Cached under `~/.cache/huggingface/hub` for the OptiLLM service user:
+  - `codelion/optillm-modernbert-large` (router head)
+  - `answerdotai/ModernBERT-large` (base encoder)
+- OptiLLM loads these directly during routing and they do not appear in `/v1/models`.
 
-Expose **one clean alias** to clients:
-```
-optillm-jerry-xl
-```
+## Current OptiLLM aliases (router-only)
 
-Behind the scenes:
-- LiteLLM maps `optillm-jerry-xl` → OptiLLM
-- LiteLLM sends `model = openai/moa-jerry-xl` (or other OptiLLM prefixed model)
-- OptiLLM applies the chosen strategy and calls upstream with `jerry-xl`
-
-This yields higher-quality plans with minimal system complexity.
+There are **no separate OptiLLM aliases** right now; MLX handles route
+through OptiLLM automatically. OptiLLM calls LiteLLM using `router-mlx-*`
+model names that map directly to MLX ports. These `router-mlx-*` entries
+are internal (not in `handles.jsonl`) but appear in LiteLLM `/v1/models`.
+This behavior can be toggled via `mlxctl sync-gateway --no-route-via-optillm`.
 
 ## Technique selection (model prefixes)
 OptiLLM chooses strategies based on the model prefix:
@@ -157,8 +167,16 @@ OptiLLM chooses strategies based on the model prefix:
 
 Example:
 ```
-OPTILLM_JERRY_XL_MODEL=openai/bon-jerry-xl
+OPTILLM_OPT_ROUTER_EXAMPLE_MODEL=router-<base-model>
 ```
+
+## Ensemble Matrix (v0)
+See `ENSEMBLES.md` for the initial OptiLLM ensemble matrix used for evaluation.
+
+## Planned registry (service-level)
+This service will own a JSONL registry for OptiLLM ensembles (planned):
+- `layer-gateway/optillm-proxy/registry/ensembles.jsonl`
+- Source of truth for OptiLLM selectors and ensemble membership.
 
 ---
 
