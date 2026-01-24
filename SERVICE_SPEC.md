@@ -65,26 +65,18 @@ local inference mode. Use the flag instead.
 ## Model & strategy handling
 
 - Base models must be valid LiteLLM model names
-- Strategy selection uses model-name prefixes:
-```
-<approach>-<base_model>
-```
-
-Example:
-```
-moa-<base-model>
-```
-
-OptiLLM strips the prefix before upstream calls.
+- Strategy selection uses request-body fields (primary) or prompt tags (secondary).
+- Supported request-body field: `optillm_approach`.
+- Optional request-body field: `optillm_base_model` (overrides the upstream model used by OptiLLM).
+- Usage reporting: `prompt_tokens` is estimated using `tiktoken` (cl100k_base) when available; falls back to a rough char-based estimate.
 
 ---
 
-## Loop-avoidance invariant
-
-- LiteLLM → OptiLLM: prefixed model name
-- OptiLLM → LiteLLM: base model name only
-
-Breaking this rule can cause infinite routing loops.
+## Wiring note
+- OptiLLM is not wired into LiteLLM by default.
+- Clients that want OptiLLM should call `http://127.0.0.1:4020/v1` directly and
+  include `optillm_approach` in the request body.
+- Deprecated: routing all MLX handles through OptiLLM via `router-mlx-*` entries.
 
 ---
 
@@ -123,6 +115,11 @@ Exact variable names depend on pinned OptiLLM version.
 | Logging | STDOUT / journald |
 | Privileges | Non-root |
 
+### Approach logging
+- OptiLLM logs the selected approaches at INFO level:
+  - `Using approach(es) [...]`
+  - See `RUNBOOK.md` for a grep example.
+
 ---
 
 ## Health checks
@@ -148,17 +145,20 @@ HTTP 200 + valid JSON indicates healthy.
 - Intended for deep reasoning and planning
 - Not for low-latency chat
 - Router model cache (proxy user): `~/.cache/huggingface/hub`
+- `web_search` uses **SearXNG** when `SEARXNG_API_BASE` is set in `/etc/optillm-proxy/env`.
+  If unset, the plugin falls back to its built-in Selenium/Google path.
 
-## Technique selection (model prefixes)
-OptiLLM chooses strategies based on the model prefix:
-- `moa-<base>`: Mixture-of-Agents (strong reasoning, higher latency)
-- `bon-<base>`: best-of-n sampling (faster than MoA, moderate gains)
-- `plansearch-<base>`: planning/search (slower, good for multi-step tasks)
-- `self_consistency-<base>`: consistency voting (slower, robust)
+## Technique selection (request-body field)
+OptiLLM chooses strategies based on `optillm_approach`:
+- `moa`: Mixture-of-Agents (strong reasoning, higher latency)
+- `bon`: best-of-n sampling (faster than MoA, moderate gains)
+- `plansearch`: planning/search (slower, good for multi-step tasks)
+- `self_consistency`: consistency voting (slower, robust)
+- `web_search`: inject SearXNG results into the prompt before answering
 
 Example:
-```
-OPTILLM_OPT_ARCHITECT_HIGH_XL_MODEL=bon-mlx-qwen3-235b-a22b-instruct-2507-6bit
+```json
+{"model":"mlx-gpt-oss-120b-mxfp4-q4","messages":[{"role":"user","content":"ping"}],"optillm_approach":"bon"}
 ```
 
 ---
@@ -175,8 +175,13 @@ No Docker installs are allowed in this repo.
 ```bash
 cd /home/christopherbailey/homelab-llm/layer-gateway/optillm-proxy
 uv venv .venv
-uv pip install optillm==0.3.12
+uv sync
+./scripts/apply_optillm_patches.sh
 ```
+
+Pinned fork:
+- `git@github.com:bebopbabailey/optillm.git` @ `7525e45`
+- Pin lives in `pyproject.toml`
 
 ## Proxy provider config
 OptiLLM proxy plugin loads providers from:

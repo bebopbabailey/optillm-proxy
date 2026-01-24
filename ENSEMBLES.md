@@ -10,6 +10,7 @@ minimal while we validate end-to-end routing and default MLX boot behavior.
 - _None currently registered._ Handles will be reintroduced once MLX models are staged.
 
 ## Notes
-- Handles are the **user-facing entry points**; selectors carry OptiLLM technique prefixes.
+- Handles are the **user-facing entry points**; techniques are selected per-request
+  via `optillm_approach`.
 - We use **router-only** selectors by default; the router decides any heavier technique.
 - This matrix will be updated after the new MLX models are downloaded and registered.

@@ -15,7 +15,7 @@ Use `uv` only. Do not use Docker.
 ## Coding Style & Naming Conventions
 - This service is a thin proxy; keep changes configuration-driven.
 - Use plain logical model names for LiteLLM aliases (e.g., `plan-architect`).
-- OptiLLM uses prefixed model names for approaches (`moa-<base-model>`).
+- OptiLLM approach selection is passed in request body as `optillm_approach`.
 
 ## Testing Guidelines
 - Minimal validation is via HTTP health and `/v1/models`.
@@ -30,8 +30,8 @@ Use `uv` only. Do not use Docker.
 
 ## Integration Requirements
 When adding this service to the system:
-- Add a LiteLLM route that points to `http://127.0.0.1:4020/v1`.
-- Ensure LiteLLM sends prefixed model names to OptiLLM (avoid loops).
+- Keep LiteLLM routing **direct** to MLX by default.
+- OptiLLM is called explicitly at `http://127.0.0.1:4020/v1` when needed.
 - Update `platform/ops/scripts/healthcheck.sh` and `platform/ops/scripts/restart-all.sh`.
 - Add a systemd unit in `platform/ops/systemd/` and an env file outside the repo.
 
@@ -45,42 +45,31 @@ Goal: implement multi-model OptiLLM ensembles (no single-model configs) across
 `xl`, `l`, `m`, `s` tiers plus `high`, `balanced`, `fast`.
 
 ### Required changes (in order)
-1) **Update handles registry**
-   - File: `layer-gateway/registry/handles.jsonl`
-   - Add `opt-*` handles that map to OptiLLM proxy (`ep_optillm_proxy_4020`).
-   - Selector must be `{"model":"<opt-selector>"}` with dash-only names.
-   - No `status` field; all rows are active by presence.
-   - Validate with `python3 scripts/validate_handles.py`.
-
-2) **Update LiteLLM routing**
+1) **Update LiteLLM routing**
    - File: `layer-gateway/litellm-orch/config/router.yaml`
-   - Ensure each `opt-*` handle is present as `model_name`.
-   - `litellm_params.model` should stay as the handle; OptiLLM handles are
-     mapped to `http://127.0.0.1:4020/v1`.
+   - Ensure `litellm_settings.drop_params: false` for param pass-through.
+   - Keep MLX handles routed directly to MLX ports.
 
-3) **Update OptiLLM selectors**
-   - File: `/etc/optillm-proxy/env` (outside repo)
-   - Define env vars for each OptiLLM ensemble model name.
-- Selector should encode the technique (e.g., `moa-<base>`).
-- No single-model selectors for OptiLLM in this phase.
-   - Note: OptiLLM selectors include technique prefixes even when handles are
-     `opt-*` (handle != selector).
+2) **Optional: handles registry**
+   - File: `layer-gateway/registry/handles.jsonl`
+   - Only add `opt-*` handles if we explicitly want separate OptiLLM entrypoints.
+   - Default is **no opt-* handles**; keep base handles and use `optillm_approach`.
 
-4) **Update OptiLLM proxy config**
+3) **Update OptiLLM proxy config**
    - File: `~/.optillm/proxy_config.yaml`
    - Ensure upstream points to LiteLLM only (`http://127.0.0.1:4000/v1`).
    - Verify enabled plugins and approach expectations.
 
-5) **Docs**
-   - Update `docs/foundation/opt-techniques.md` with tier guidance.
+4) **Docs**
+   - Update `docs/foundation/optillm-techniques.md` with tier guidance.
    - Update `docs/INTEGRATIONS.md` if new handles are exposed.
    - Update `docs/journal/*` with decision and rationale.
 
 ### Validation checklist
 - `python3 scripts/validate_handles.py`
-- `curl -fsS http://127.0.0.1:4000/v1/models | jq -r '.data[].id' | rg '^opt-'`
-- Optional smoke test:
-  - `curl -fsS http://127.0.0.1:4000/v1/chat/completions -H "Authorization: Bearer $LITELLM_API_KEY" -H "Content-Type: application/json" -d '{"model":"opt-<handle>","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'`
+- `curl -fsS http://127.0.0.1:4000/v1/models | jq -r '.data[].id' | rg '^mlx-'`
+- Optional OptiLLM smoke test (direct):
+  - `curl -fsS http://127.0.0.1:4020/v1/chat/completions -H "Authorization: Bearer $OPTILLM_API_KEY" -H "Content-Type: application/json" -d '{"model":"mlx-<handle>","messages":[{"role":"user","content":"ping"}],"optillm_approach":"bon","max_tokens":16}'`
 
 ### Ensemble helpers
 - OV utility ensembles (Mini):
@@ -98,6 +87,6 @@ Goal: implement multi-model OptiLLM ensembles (no single-model configs) across
 
 ### Constraints
 - Registry values use kebab-case only (letters, digits, dashes).
-- OptiLLM selectors must match the model naming standard (dash-only).
+- OptiLLM approaches must match the OptiLLM approach registry (dash/underscore as provided).
 - Do not edit files under `docs/archive/`.
 - Do not create single-model OptiLLM configs for this phase.

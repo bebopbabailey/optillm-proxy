@@ -3,12 +3,12 @@
 Status: running with **all bundled plugins loaded** (as of 2026-01-19).
 
 ## Core
-- **Approach**: auto (required for prefix chaining and `&` / `|` composition).
+- **Approach**: proxy (per-request technique selection).
 - **Bind**: 127.0.0.1:4020
 - **Upstream**: LiteLLM (`http://127.0.0.1:4000/v1`)
 
 ## Techniques (Approaches)
-These are inference-time strategies selectable via model prefixes. Descriptions are based on OptiLLM docs.
+These are inference-time strategies selectable via `optillm_approach` (request body) or prompt tags. Descriptions are based on OptiLLM docs.
 
 - `mars` — Multi-agent reasoning with diverse temperature exploration, cross-verification, and iterative improvement. citeturn3view0
 - `cepo` — Cerebras Planning and Optimization; combines Best-of-N, CoT, self-reflection, and self-improvement. citeturn3view0
@@ -43,7 +43,7 @@ Plugins are chained with `&` and can be combined with approaches. Descriptions a
 - `executecode` — Execute Python code from prompts/outputs. citeturn3view1
 - `json` — Structured outputs via outlines (Pydantic/JSON schema). citeturn3view1
 - `genselect` — Generate multiple candidates and select best by quality. citeturn3view1
-- `web_search` — Google search via Selenium (gathers results and URLs). citeturn3view1
+- `web_search` — **SearXNG** search when `SEARXNG_API_BASE` is set; otherwise uses the Selenium/Google fallback. citeturn3view1
 - `deep_research` — Test-Time Diffusion deep research with iterative refinement. citeturn3view1
 - `proxy` — Load balancing + failover across LLM providers. citeturn3view1
 
@@ -53,6 +53,6 @@ Plugins are chained with `&` and can be combined with approaches. Descriptions a
 - Proxy cache location (Mini): `~/.cache/huggingface/hub` for the OptiLLM service user.
 
 ## Notes
-- Prefix chaining and `&`/`|` composition require running OptiLLM with approach `auto`. citeturn1search0
+- Plugin chaining with `&`/`|` still works, but technique selection is set per request.
 - If plugin load errors appear, check `journalctl -u optillm-proxy.service`.
 - OptiLLM local (Studio) pins `transformers<5` to keep router compatible.

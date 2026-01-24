@@ -32,27 +32,36 @@ Any OpenAI-compatible client (including LiteLLM) can talk to OptiLLM by pointing
 
 ## How optimization strategies are selected
 
-OptiLLM supports multiple mechanisms. For this repo, **model-name prefixing is the primary method**.
+OptiLLM supports multiple mechanisms. For this repo, **request-body selection is the primary method** (no alias explosion).
 
-### Model-name prefix convention
+### Request-body selection (primary)
 
-Format:
+Include an `optillm_approach` field in the request body when calling OptiLLM
+directly. This is the preferred, most ergonomic method and works from Open WebUI
+custom params, curl, iOS Shortcuts, and any OpenAI-compatible client.
+
+Example (raw HTTP):
+```json
+{
+  "model": "mlx-gpt-oss-120b-mxfp4-q4",
+  "messages": [{"role": "user", "content": "Write a plan."}],
+  "optillm_approach": "bon"
+}
 ```
-<approach>-<base_model>
+
+### Prompt tag selection (secondary)
+
+OptiLLM also supports prompt tags in the message content. Use this only when a client
+cannot add extra JSON fields.
+Example tag:
+```
+<optillm_approach>bon</optillm_approach>
 ```
 
-Example:
-```
-moa-<base-model>
-```
+### Model-name prefixing (supported, not used)
 
-Meaning:
-- `moa` → Mixture-of-Agents strategy
-- `<base-model>` → base model used upstream
-
-OptiLLM strips the prefix internally before calling upstream.
-
-Clients should never see or select these prefixed names directly.
+OptiLLM can parse approach prefixes in model names, but this repo avoids it to keep
+handles stable and prevent alias sprawl.
 
 ---
 
@@ -95,13 +104,13 @@ providers:
 
 ## Install and run (uv-only)
 
-This repo does not allow Docker installs. Use `uv` to install a pinned OptiLLM
-version and run it as a local service.
+This repo does not allow Docker installs. Use `uv` with a **pinned fork**
+of OptiLLM and run it as a local service.
 
 ```bash
 cd /home/christopherbailey/homelab-llm/layer-gateway/optillm-proxy
 uv venv .venv
-uv pip install optillm==0.3.12
+uv sync
 ```
 
 Run manually (for quick verification):
@@ -124,50 +133,39 @@ Notes:
 - OptiLLM local (Studio) uses `/Users/thestudio/models/hf/hub` and pins
   `transformers<5` for router compatibility (see `layer-gateway/optillm-local`).
 
-## Warm start (router model)
-- Systemd uses a warmup request after startup to load the router classifier:
-  - Unit: `/etc/systemd/system/optillm-proxy.service` (`ExecStartPost`)
-  - Payload: `/etc/optillm-proxy/warmup.json`
-- This triggers `router-<base>` once so the router model is loaded into memory.
-- Router model cache (proxy): `~/.cache/huggingface/hub` for the OptiLLM service user.
+## Pinned fork (durability)
 
-## Loop-avoidance rule (critical)
+OptiLLM is pinned to a fork so local patches survive upgrades. The dependency
+is defined in `pyproject.toml` as a git URL with a commit hash.
 
-Because OptiLLM calls back into LiteLLM, routing must avoid infinite loops.
+Current pin:
+- Repo: `git@github.com:bebopbabailey/optillm.git`
+- Commit: `7525e45`
 
-Required invariant:
-- LiteLLM → OptiLLM: **prefixed model name** (e.g., `moa-<base-model>`)
-- OptiLLM → LiteLLM (upstream): **base model only** (e.g., `<base-model>`)
-
-LiteLLM must never route the base model back to OptiLLM.
-
----
+See `RUNBOOK.md` for update steps.
 
 ## Router model (internal)
 - The `router` plugin uses an internal classifier model (not exposed via LiteLLM).
 - Cached under `~/.cache/huggingface/hub` for the OptiLLM service user:
   - `codelion/optillm-modernbert-large` (router head)
   - `answerdotai/ModernBERT-large` (base encoder)
-- OptiLLM loads these directly during routing and they do not appear in `/v1/models`.
 
-## Current OptiLLM aliases (router-only)
+## Deprecated wiring
+- Routing all MLX handles through OptiLLM via `router-mlx-*` entries in LiteLLM
+  is deprecated. Current practice is direct MLX routing in LiteLLM and explicit
+  OptiLLM calls only when needed.
 
-There are **no separate OptiLLM aliases** right now; MLX handles route
-through OptiLLM automatically. OptiLLM calls LiteLLM using `router-mlx-*`
-model names that map directly to MLX ports. These `router-mlx-*` entries
-are internal (not in `handles.jsonl`) but appear in LiteLLM `/v1/models`.
-This behavior can be toggled via `mlxctl sync-gateway --no-route-via-optillm`.
-
-## Technique selection (model prefixes)
-OptiLLM chooses strategies based on the model prefix:
-- `moa-<base>`: Mixture-of-Agents (strong reasoning, higher latency)
-- `bon-<base>`: best-of-n sampling (faster than MoA, moderate gains)
-- `plansearch-<base>`: planning/search (slower, good for multi-step tasks)
-- `self_consistency-<base>`: consistency voting (slower, robust)
+## Technique selection (request-body field)
+OptiLLM chooses strategies based on `optillm_approach`:
+- `moa`: Mixture-of-Agents (strong reasoning, higher latency)
+- `bon`: best-of-n sampling (faster than MoA, moderate gains)
+- `plansearch`: planning/search (slower, good for multi-step tasks)
+- `self_consistency`: consistency voting (slower, robust)
+- `web_search`: run SearXNG search first (requires `SEARXNG_API_BASE`)
 
 Example:
-```
-OPTILLM_OPT_ROUTER_EXAMPLE_MODEL=router-<base-model>
+```json
+{"model":"mlx-gpt-oss-120b-mxfp4-q4","messages":[{"role":"user","content":"ping"}],"optillm_approach":"moa"}
 ```
 
 ## Ensemble Matrix (v0)
