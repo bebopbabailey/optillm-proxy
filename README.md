@@ -76,6 +76,7 @@ There are **two separate authentication concerns**.
 ```
 Authorization: Bearer <OPTILLM_API_KEY>
 ```
+Missing this header returns `Invalid Authorization header` even on localhost.
 
 ### 2) Upstream authentication
 - Used when OptiLLM calls LiteLLM

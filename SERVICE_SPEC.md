@@ -52,6 +52,7 @@ Minimum required:
 ```
 Authorization: Bearer <OPTILLM_API_KEY>
 ```
+Missing this header returns `Invalid Authorization header` (even on localhost).
 
 ### Upstream auth
 - Provided via `OPENAI_API_KEY` (or equivalent LiteLLM config)
@@ -98,8 +99,9 @@ Runtime flags (systemd `ExecStart` should pass explicitly):
 - `--host 127.0.0.1`
 - `--port 4020`
 - `--base-url http://127.0.0.1:4000/v1`
-- `--approach proxy`
+- `--approach router`
 - `--model <base_model>` (example: `qwen3-235b-a22b-instruct-2507-6bit`)
+- `--plugins-dir <path>` (local plugin overrides)
 - `--optillm-api-key <key>` (proxy auth)
 
 Exact variable names depend on pinned OptiLLM version.
@@ -146,6 +148,7 @@ HTTP 200 + valid JSON indicates healthy.
 - Not for low-latency chat
 - Router model cache (proxy user): `~/.cache/huggingface/hub`
 - `web_search` uses **SearXNG** when `SEARXNG_API_BASE` is set in `/etc/optillm-proxy/env`.
+  Local override: `layer-gateway/optillm-proxy/optillm/plugins/web_search_plugin.py`.
   If unset, the plugin falls back to its built-in Selenium/Google path.
 
 ## Technique selection (request-body field)
@@ -176,11 +179,10 @@ No Docker installs are allowed in this repo.
 cd /home/christopherbailey/homelab-llm/layer-gateway/optillm-proxy
 uv venv .venv
 uv sync
-./scripts/apply_optillm_patches.sh
 ```
 
-Pinned fork:
-- `git@github.com:bebopbabailey/optillm.git` @ `7525e45`
+Pinned release:
+- `optillm==0.3.12`
 - Pin lives in `pyproject.toml`
 
 ## Proxy provider config

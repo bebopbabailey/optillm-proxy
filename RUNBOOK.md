@@ -12,6 +12,10 @@ sudo systemctl restart optillm-proxy.service
 journalctl -u optillm-proxy.service -f
 ```
 
+## Auth reminder
+- OptiLLM requires `Authorization: Bearer <OPTILLM_API_KEY>` for all requests, even from localhost.
+- Missing headers return `Invalid Authorization header`.
+
 ### Confirm approach usage
 OptiLLM already logs the selected approaches at INFO level. Look for:
 ```
@@ -31,19 +35,12 @@ layer-gateway/optillm-proxy/scripts/bench_stream.py \
 ```
 ```
 
-## Update OptiLLM fork (durable patches)
-1) Update the fork repo (rebase or merge upstream changes).
-2) Apply/verify local patches:
-   - `optillm/server.py`: honor `optillm_base_model` (prevents LiteLLM preset loops)
-   - `optillm/server.py`: preserve router prefix parsing and strip `optillm_approach`
-   - `optillm/bon.py`: enforce strict role alternation for rating prompts
-3) Push the fork and note the new commit hash.
-4) Update the pin in `pyproject.toml`.
-5) Reinstall and restart:
+## Update OptiLLM (upstream release)
+1) Update the pin in `pyproject.toml`.
+2) Reinstall and restart:
 ```bash
 cd /home/christopherbailey/homelab-llm/layer-gateway/optillm-proxy
 uv sync
-./scripts/apply_optillm_patches.sh
 sudo systemctl restart optillm-proxy.service
 ```
 
